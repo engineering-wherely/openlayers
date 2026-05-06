@@ -2,7 +2,11 @@
  * @module ol/layer/Heatmap
  */
 import {createCanvasContext2D} from '../dom.js';
-import {BooleanType, NumberType} from '../expr/expression.js';
+import {
+  BooleanType,
+  NumberType,
+  newParsingContext,
+} from '../expr/expression.js';
 import {newCompilationContext} from '../expr/gpu.js';
 import {clamp} from '../math.js';
 import {ShaderBuilder} from '../render/webgl/ShaderBuilder.js';
@@ -14,6 +18,20 @@ import {
 } from '../render/webgl/compileUtil.js';
 import WebGLVectorLayerRenderer from '../renderer/webgl/VectorLayer.js';
 import BaseVector from './BaseVector.js';
+
+/**
+ * @typedef {'change:blur'|'change:radius'|'change:gradient'} HeatmapEventTypes
+ */
+
+/***
+ * @template Return
+ * @typedef {import("../Observable.js").OnSignature<import("../Observable.js").EventTypes, import("../events/Event.js").default, Return> &
+ *   import("../Observable.js").OnSignature<import("./Base.js").BaseLayerObjectEventTypes|
+ *     import("./Layer.js").LayerEventType|HeatmapEventTypes, import("../Object.js").ObjectEvent, Return> &
+ *   import("../Observable.js").OnSignature<import("../render/EventType.js").LayerRenderEventTypes, import("../render/Event.js").default, Return> &
+ *   import("../Observable.js").CombinedOnSignature<import("../Observable.js").EventTypes|import("./Base.js").BaseLayerObjectEventTypes|
+ *     import("./Layer.js").LayerEventType|HeatmapEventTypes|import("../render/EventType.js").LayerRenderEventTypes, Return>} HeatmapOnSignature
+ */
 
 /**
  * @typedef {import("../style/flat.js").NumberExpression|string|function(import("../Feature.js").default):number} WeightExpression
@@ -99,6 +117,21 @@ class Heatmap extends BaseVector {
     delete baseOptions.blur;
     delete baseOptions.weight;
     super(baseOptions);
+
+    /***
+     * @type {HeatmapOnSignature<import("../events.js").EventsKey>}
+     */
+    this.on;
+
+    /***
+     * @type {HeatmapOnSignature<import("../events.js").EventsKey>}
+     */
+    this.once;
+
+    /***
+     * @type {HeatmapOnSignature<void>}
+     */
+    this.un;
 
     this.filter_ = options.filter ?? true;
 
@@ -248,7 +281,13 @@ class Heatmap extends BaseVector {
     const builder = new ShaderBuilder();
 
     const context = newCompilationContext();
-    const filterCompiled = expressionToGlsl(context, this.filter_, BooleanType);
+    const filterParsingContext = newParsingContext();
+    const filterCompiled = expressionToGlsl(
+      context,
+      this.filter_,
+      BooleanType,
+      filterParsingContext,
+    );
     let radiusCompiled = expressionToGlsl(
       context,
       this.getRadius(),
@@ -294,24 +333,24 @@ class Heatmap extends BaseVector {
       weightExpression = expressionToGlsl(context, clampedWeight, NumberType);
     }
 
+    const blurSlopeExpr = `(${radiusCompiled} / max(1., ${blurCompiled}))`;
+
     builder
-      .addFragmentShaderFunction(
-        `float getBlurSlope() {
-  float blur = max(1., ${blurCompiled});
-  float radius = ${radiusCompiled};
-  return radius / blur;
-}`,
-      )
       .setSymbolSizeExpression(`vec2(${radiusCompiled} + ${blurCompiled}) * 2.`)
       .setSymbolColorExpression(
-        `vec4(smoothstep(0., 1., (1. - length(coordsPx * 2. / v_quadSizePx)) * getBlurSlope()) * ${weightExpression})`,
+        `vec4(smoothstep(0., 1., (1. - length(coordsPx * 2. / v_quadSizePx)) * ${blurSlopeExpr}) * ${weightExpression})`,
       )
       .setStrokeColorExpression(
-        `vec4(smoothstep(0., 1., (1. - length(currentRadiusPx * 2. / v_width)) * getBlurSlope()) * ${weightExpression})`,
+        `vec4(smoothstep(0., 1., (1. - length(currentRadiusPx * 2. / v_width)) * ${blurSlopeExpr}) * ${weightExpression})`,
       )
       .setStrokeWidthExpression(`(${radiusCompiled} + ${blurCompiled}) * 2.`)
-      .setFillColorExpression(`vec4(${weightExpression})`)
-      .setFragmentDiscardExpression(`!${filterCompiled}`);
+      .setFillColorExpression(`vec4(${weightExpression})`);
+
+    if (filterParsingContext.mCoordinate) {
+      builder.setFragmentDiscardExpression(`!${filterCompiled}`);
+    } else {
+      builder.setShapeDiscardExpression(`!${filterCompiled}`);
+    }
 
     applyContextToBuilder(builder, context);
     const attributes = generateAttributesFromContext(context);
