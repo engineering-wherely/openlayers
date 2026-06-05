@@ -1,5 +1,10 @@
-import path from 'node:path';
+// This file has been automatically migrated to valid ESM format by Storybook.
+import { fileURLToPath } from 'node:url';
+import path, { dirname } from 'node:path';
 import type { StorybookConfig } from '@storybook/vue3-vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.mdx', '../src/**/*.stories.@(js|jsx|mjs|ts|tsx)'],
@@ -18,7 +23,7 @@ const config: StorybookConfig = {
     config.resolve.alias ??= {};
     Object.assign(config.resolve.alias, {
       '@': path.resolve(__dirname, '../src'),
-      '@ol': path.resolve(__dirname, '../../build/ol'),
+      '@/ol': path.resolve(__dirname, '../../build/ol'),
     });
     return config;
   },

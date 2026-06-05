@@ -13,7 +13,7 @@
     "noUncheckedSideEffectImports": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@ol/*": ["../build/ol/*"]
+      "@/ol/*": ["../build/ol/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", ".storybook/**/*.ts"]

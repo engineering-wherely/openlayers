@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ScaleLine from '@ol/control/ScaleLine';
+import ScaleLine from '@/ol/control/ScaleLine';
 </script>
 
 <template>
