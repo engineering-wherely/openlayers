@@ -2,6 +2,7 @@
 import { fileURLToPath } from 'node:url';
 import path, { dirname } from 'node:path';
 import type { StorybookConfig } from '@storybook/vue3-vite';
+import type { AliasOptions } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,11 +21,20 @@ const config: StorybookConfig = {
   },
   async viteFinal(config) {
     config.resolve ??= {};
-    config.resolve.alias ??= {};
-    Object.assign(config.resolve.alias, {
-      '@': path.resolve(__dirname, '../src'),
-      '@/ol': path.resolve(__dirname, '../../build/ol'),
-    });
+    const aliases: AliasOptions = [
+      { find: /^@\/ol(?=\/|$)/, replacement: path.resolve(__dirname, '../../build/ol') },
+      { find: /^@(?=\/|$)/, replacement: path.resolve(__dirname, '../src') },
+    ];
+    const existingAliases = config.resolve.alias;
+    config.resolve.alias = Array.isArray(existingAliases)
+      ? [...aliases, ...existingAliases]
+      : [
+          ...aliases,
+          ...Object.entries(existingAliases ?? {}).map(([find, replacement]) => ({
+            find,
+            replacement,
+          })),
+        ];
     return config;
   },
 };
